@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>superstar_shop</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/blueimp-md5/2.19.0/js/md5.min.js"></script>
+
+<script>
+  // ===== CONFIG =====
+  const GAME_ID  = "1051800";
+  const PRIV_KEY = "8d15ad251c4fbd525205dc3b5acc8f5d";
+  const API_BASE = "https://api.gamejolt.com/api/game/v1_2";
+  const PRECO_ITEM = 1230;
+
+  function obterParametroURL(name) {
+      return new URLSearchParams(window.location.search).get(name);
+  }
+
+  const usuarioGameJolt = obterParametroURL('gjapi_username');
+  const tokenGameJolt   = obterParametroURL('gjapi_token');
+  // getChaveGlobal() calculada depois do load para garantir que a URL foi lida
+  function getChaveGlobal() {
+    const u = obterParametroURL('gjapi_username');
+    return "stardust_saldo_" + u;
+  }
+
+  async function gjCall(endpoint, params) {
+      params.game_id = GAME_ID;
+      params.format  = "json";
+      const query      = new URLSearchParams(params).toString();
+      const urlSemSig  = API_BASE + endpoint + "?" + query;
+      const signature  = md5(urlSemSig + PRIV_KEY);
+      const resp       = await fetch(urlSemSig + "&signature=" + signature);
+      const json       = await resp.json();
+      return json.response;
+  }
+
+  window.onload = async function() {
+      if (!usuarioGameJolt || !tokenGameJolt) {
+          document.getElementById("saldo-valor").innerText = "0";
+          verificarEBloquearBotao(0);
+          return;
+      }
+
+      try {
+          const auth = await gjCall("/users/auth/", {
+              username:   usuarioGameJolt,
+              user_token: tokenGameJolt
+          });
+
+          if (auth.success !== "true") {
+              document.getElementById("saldo-valor").innerText = "0";
+              verificarEBloquearBotao(0);
+              return;
+          }
+
+          const resp = await gjCall("/data-store/", { key: getChaveGlobal() });
+
+          if (resp.success === "true") {
+              const saldo = parseInt(resp.data);
+              document.getElementById("saldo-valor").innerText = saldo;
+              verificarEBloquearBotao(saldo);
+          } else {
+              // Cria a chave global se não existir
+              await gjCall("/data-store/set/", { key: getChaveGlobal(), data: "0" });
+              document.getElementById("saldo-valor").innerText = "0";
+              verificarEBloquearBotao(0);
+          }
+      } catch(e) {
+          document.getElementById("saldo-valor").innerText = "0";
+          verificarEBloquearBotao(0);
+      }
+  };
+
+  function verificarEBloquearBotao(saldo) {
+      const botao = document.getElementById("botao-comprar");
+      if (saldo < PRECO_ITEM) {
+          botao.classList.add("bloqueado");
+      } else {
+          botao.classList.remove("bloqueado");
+      }
+  }
+
+  async function realizarCompra() {
+      if (!usuarioGameJolt) {
+          alert("You must be logged into Game Jolt to make a purchase!");
+          return;
+      }
+
+      try {
+          const resp = await gjCall("/data-store/", { key: getChaveGlobal() });
+
+          if (resp.success !== "true") {
+              alert("Could not read your balance. Please try again.");
+              return;
+          }
+
+          const saldoAtual = parseInt(resp.data);
+
+          if (saldoAtual < PRECO_ITEM) {
+              alert("Not enough Stardust!");
+              return;
+          }
+
+          const novoSaldo = saldoAtual - PRECO_ITEM;
+
+          const update = await gjCall("/data-store/set/", {
+              key:  getChaveGlobal(),
+              data: String(novoSaldo)
+          });
+
+          if (update.success === "true") {
+              window.location.href = "get_basic_header.html";
+          } else {
+              alert("Payment processing failed. Please try again.");
+          }
+      } catch(e) {
+          alert("Error: " + e);
+      }
+  }
+
+  document.addEventListener('contextmenu', function(e) {
+    if (e.target.classList.contains('item')) {
+      e.preventDefault();
+    }
+  });
+</script>
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #ffffff;
+  color: #111111;
+  font-family: sans-serif;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+@media (prefers-color-scheme: dark) {
+  html, body {
+    background-color: #312B27;
+    color: #E5DFDB;
+  }
+}
+
+.wrapper-jogo {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.godot-scroll-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px;
+  box-sizing: border-box;
+  -webkit-overflow-scrolling: touch !important;
+  touch-action: pan-y !important;
+}
+
+.godot-scroll-container::-webkit-scrollbar { width: 6px; }
+.godot-scroll-container::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.2);
+  border-radius: 4px;
+}
+
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 16px 0 16px;
+}
+
+.header-top h3 { margin: 0; font-weight: bold; }
+
+.saldo-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.icone-stardust { width: 24px; height: 24px; object-fit: contain; }
+
+.item {
+  width: 100%;
+  height: auto;
+  display: block;
+  background-color: #aaaaaa;
+  border-radius: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .item { background-color: #555555; }
+}
+
+.text1 { text-align: center; }
+
+.btn-comprar {
+  display: block;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.text2 {
+  text-align: center;
+  background-color: #000000;
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 10px 0;
+  margin: 10px 0;
+  transition: background-color 0.2s, opacity 0.2s;
+}
+
+@media (prefers-color-scheme: dark) {
+  .text2 { background-color: #ffffff; color: #000000; }
+}
+
+.btn-comprar.bloqueado {
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+.btn-comprar.bloqueado .text2 {
+  background-color: #444444;
+  color: #888888;
+  opacity: 0.6;
+}
+
+@media (prefers-color-scheme: dark) {
+  .btn-comprar.bloqueado .text2 {
+    background-color: #222222;
+    color: #555555;
+    opacity: 0.5;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="wrapper-jogo">
+
+  <div class="header-top">
+      <a href="javascript:history.back()" style="text-decoration: none; color: inherit;">
+          <h3>Avatar frame</h3>
+      </a>
+      <div class="saldo-container">
+          <span id="saldo-valor">...</span>
+          <img class="icone-stardust" src="stardust.png" alt="Stardust">
+      </div>
+  </div>
+
+  <div class="godot-scroll-container">
+
+      <img class="item" src="basic_interstellar_header.png">
+
+      <h2 class="text1">GET THIS ITEM</h2>
+
+      <a id="botao-comprar" class="btn-comprar bloqueado" onclick="realizarCompra()">
+          <h5 class="text2">
+              <img src="stardust.png" alt="icon" style="width: 20px; vertical-align: middle; margin-right: 5px;">
+              1,230
+          </h5>
+      </a>
+
+      <h5 class="text1">You can purchase this item with Stardust</h5>
+      <a href="https://gamejolt.com/c/SSC-7x3z65/events" style="text-decoration: none;"><h5 class="text1">Get more Stardust</h5></a>
+      <h5 class="text1">Remember the items from here doesn't works like the normal ones. After purshasing it, you gonna recive a image to use.Equip this avatar frame adding it to your actual profile picture.</h5>
+
+  </div>
+</div>
+
+</body>
+</html>
