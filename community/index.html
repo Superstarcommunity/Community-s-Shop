@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>superstar_shop</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/blueimp-md5/2.19.0/js/md5.min.js"></script>
+
+<script>
+  const GAME_ID  = "1051800";
+  const PRIV_KEY = "8d15ad251c4fbd525205dc3b5acc8f5d";
+  const API_BASE = "https://api.gamejolt.com/api/game/v1_2";
+
+  async function gjCall(endpoint, params) {
+      const urlBase = API_BASE + endpoint;
+      params.game_id = GAME_ID;
+      params.format  = "json";
+      const query     = new URLSearchParams(params).toString();
+      const urlSemSig = urlBase + "?" + query;
+      const signature = md5(urlSemSig + PRIV_KEY);
+      const resp      = await fetch(urlSemSig + "&signature=" + signature);
+      const json      = await resp.json();
+      return json.response;
+  }
+
+  function obterParametroURL(name) {
+      return new URLSearchParams(window.location.search).get(name);
+  }
+
+  const usuarioGameJolt = obterParametroURL('gjapi_username');
+  const tokenGameJolt   = obterParametroURL('gjapi_token');
+
+  window.onload = async function() {
+      const saldoEl = document.getElementById("saldo-valor");
+
+      if (!usuarioGameJolt || !tokenGameJolt) {
+          saldoEl.innerText = "0";
+          return;
+      }
+
+      try {
+          const auth = await gjCall("/users/auth/", {
+              username:   usuarioGameJolt,
+              user_token: tokenGameJolt
+          });
+
+          if (auth.success !== "true") {
+              saldoEl.innerText = "0";
+              return;
+          }
+
+          const chave = "stardust_saldo_" + usuarioGameJolt;
+          const fetch_resp = await gjCall("/data-store/", { key: chave });
+
+          if (fetch_resp.success === "true") {
+              saldoEl.innerText = fetch_resp.data;
+          } else {
+              await gjCall("/data-store/set/", { key: chave, data: "0" });
+              saldoEl.innerText = "0";
+          }
+
+          // Passa credenciais nos links de compra
+          const params = "?gjapi_username=" + encodeURIComponent(usuarioGameJolt)
+                       + "&gjapi_token="    + encodeURIComponent(tokenGameJolt);
+          document.querySelectorAll('a[href^="buy/"]').forEach(function(link) {
+              link.setAttribute('href', link.getAttribute('href') + params);
+          });
+
+      } catch(e) {
+          saldoEl.innerText = "0";
+      }
+  };
+
+  document.addEventListener('contextmenu', function(e) {
+    if (e.target.classList.contains('item') || e.target.classList.contains('img-responsiva')) {
+      e.preventDefault();
+    }
+  });
+</script>
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #ffffff;
+  color: #111111;
+  font-family: sans-serif;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+@media (prefers-color-scheme: dark) {
+  html, body {
+    background-color: #312B27;
+    color: #E5DFDB;
+  }
+}
+
+.wrapper-jogo {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.godot-scroll-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px;
+  box-sizing: border-box;
+  -webkit-overflow-scrolling: touch !important;
+  touch-action: pan-y !important;
+}
+
+.godot-scroll-container::-webkit-scrollbar { width: 6px; }
+.godot-scroll-container::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 16px 0 16px;
+}
+
+.header-top h3 { margin: 0; font-weight: bold; }
+
+.saldo-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.icone-stardust { width: 24px; height: 24px; object-fit: contain; }
+
+footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+  padding-bottom: 40px;
+}
+
+header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 8px;
+  background-color: #aaaaaa;
+  padding: 10px;
+}
+
+@media (prefers-color-scheme: dark) {
+  header { background-color: #555555; }
+}
+
+.grid-produtos {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  padding: 12px;
+  border-radius: 8px;
+  background-color: #e5dfdb;
+  margin-bottom: 20px;
+}
+
+.grid-produtos > a { display: block; width: 100%; }
+
+@media (prefers-color-scheme: dark) {
+  .grid-produtos { background-color: #27221D; }
+}
+
+.img-responsiva { width: 100%; height: auto; }
+.item { width: 100%; height: auto; display: block; }
+
+@media (min-width: 768px) {
+  .grid-produtos { grid-template-columns: repeat(4, 1fr); gap: 16px; }
+}
+</style>
+</head>
+<body>
+
+<div class="wrapper-jogo">
+
+  <div class="header-top">
+      <a href="javascript:history.back()" style="text-decoration: none; color: inherit;">
+          <h3>SHOP</h3>
+      </a>
+      <div class="saldo-container">
+          <span id="saldo-valor">...</span>
+          <img class="icone-stardust" src="buy/stardust.png" alt="Stardust">
+      </div>
+  </div>
+
+  <div class="godot-scroll-container">
+
+    <header>
+        <a href="https://gamejolt.com/c/SSC-7x3z65/events">
+            <img class="img-responsiva" src="earn_it.png" alt="Get Stardust">
+        </a>
+    </header>
+
+    <h3 style="font-weight: bold; letter-spacing: 0.2px;">SPECIAL</h3>
+    <div class="grid-produtos">
+      <a href="buy/buy_stardust_lover.html"><img class="item" src="content/stardust_lover.png"></a>
+      <a href="buy/buy_w_star_pack.html"><img class="item" src="content/w_star_pack.png"></a>
+      <a href="buy/buy_b_star_pack.html"><img class="item" src="content/b_star_pack.png"></a>
+      <a href="buy/buy_w_star.html"><img class="item" src="content/w_star.png"></a>
+      <a href="buy/buy_b_star.html"><img class="item" src="content/b_star.png"></a>
+    </div>
+      
+    <h3 style="font-weight: bold; letter-spacing: 0.2px;">PREMIUM</h3>
+    <div class="grid-produtos">
+      <a href="buy/buy_premium_theme.html"><img class="item" src="content/premium_interstellar_theme.png"></a>
+      <a href="buy/buy_premium_header.html"><img class="item" src="content/premium_interstellar_header.png"></a>
+      <a href="buy/buy_premium_bg.html"><img class="item" src="content/premium_interstellar_background.png"></a>
+    </div>
+
+    <h3 style="font-weight: bold; letter-spacing: 0.2px;">BASIC</h3>
+    <div class="grid-produtos">
+      <a href="buy/buy_basic_theme.html"><img class="item" src="content/basic_interstellar_theme.png"></a>
+      <a href="buy/buy_basic_header.html"><img class="item" src="content/basic_interstellar_header.png"></a>
+      <a href="buy/buy_basic_bg.html"><img class="item" src="content/basic_interstellar_background.png"></a>
+    </div>
+
+    <footer>
+      <img class="img-responsiva" src="vending_vance.png">
+    </footer>
+
+  </div>
+
+</div>
+
+</body>
+</html>
